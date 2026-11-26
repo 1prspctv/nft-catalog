@@ -1,0 +1,12 @@
+name: probe
+on: { push: { branches: [tvos], paths: [.github/workflows/probe.yml] }, workflow_dispatch: {} }
+jobs:
+  probe:
+    strategy: { fail-fast: false, matrix: { os: [macos-26, macos-15] } }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          sw_vers; ls /Applications | grep -i xcode; xcodebuild -version
+          xcodebuild -showsdks | grep -i tv || true
+          xcrun simctl list runtimes | grep -i tv || true
+          which xcodegen || brew info xcodegen | head -3
