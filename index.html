@@ -293,10 +293,41 @@ async function load() {
     const need = new Set(items.filter(i => i.creatorAddr && !i.creatorName).map(i => i.creatorAddr));
     if (need.size) { const names = await resolveNames(need); for (const i of items) if (!i.creatorName && names.has(i.creatorAddr)) i.creatorName = names.get(i.creatorAddr); }
     $("status").textContent = ""; render();
+    if (location.hash === "#diag") diagVideos();
   } catch (e) {
     $("summary").textContent = "Couldn't reach the Tezos data service. Check your connection and reload the page.";
     $("status").textContent = String(e?.message || e);
   }
+}
+
+
+/* ---------- diagnostics (#diag) ---------- */
+async function diagVideos() {
+  const SRC = {
+    "ipfs.io": u => toHttp(u, "https://ipfs.io"), "dweb": u => toHttp(u, "https://dweb.link"), "w3s": u => toHttp(u, "https://w3s.link"),
+    "pinata": u => toHttp(u, "https://gateway.pinata.cloud"), "nftstor": u => toHttp(u, "https://nftstorage.link"),
+    "teia": u => toHttp(u, "https://cache.teia.rocks"), "objkt": u => u.startsWith("ipfs://") ? `https://assets.objkt.media/file/assets-003/${cidOf(u)}/artifact` : ""
+  };
+  const vids = items.filter(i => i.kind === "video" || /^video\//.test(i.mime));
+  const pre = document.createElement("pre"); pre.id = "diag"; pre.style.cssText = "white-space:pre-wrap;font:11px monospace;padding:8px;background:#fff";
+  document.body.prepend(pre);
+  const res = vids.map(i => ({i, r: {}}));
+  const tasks = []; for (const x of res) for (const k in SRC) tasks.push([x, k]);
+  const probe = async (x, k) => {
+    const url = SRC[k](x.i.fullUri); if (!url) { x.r[k] = "-"; return; }
+    const c = new AbortController(), t0 = performance.now(), to = setTimeout(() => c.abort(), 25000);
+    try { const r = await fetch(url, {headers: {Range: "bytes=0-1"}, signal: c.signal}); const ct = (r.headers.get("content-type") || "").split(";")[0];
+      x.r[k] = `${r.status} ${ct.replace("video/", "v/").replace("application/", "a/")} ${Math.round(performance.now() - t0)}ms`; r.body?.cancel?.(); }
+    catch (e) { x.r[k] = e.name === "AbortError" ? "TIMEOUT" : "ERR"; } finally { clearTimeout(to); }
+  };
+  let n = 0; const draw = () => {
+    const tally = {}; for (const k in SRC) tally[k] = {ok206: 0, ok200: 0, bad: 0};
+    for (const x of res) for (const k in SRC) { const v = x.r[k] || ""; if (v.startsWith("206")) tally[k].ok206++; else if (v.startsWith("200")) tally[k].ok200++; else if (v) tally[k].bad++; }
+    pre.textContent = `DIAG ${n}/${tasks.length} videos=${vids.length}\n` + Object.entries(tally).map(([k, t]) => `${k}: 206=${t.ok206} 200=${t.ok200} bad=${t.bad}`).join("\n") + "\n\n" +
+      res.map(x => `${x.i.name.slice(0, 28)} | ${x.i.mime} | ${x.i.fullUri.slice(0, 70)}\n   ` + Object.keys(SRC).map(k => `${k}:${x.r[k] || "…"}`).join("  ")).join("\n");
+  };
+  const worker = async () => { while (tasks.length) { const [x, k] = tasks.shift(); await probe(x, k); n++; if (n % 7 === 0) draw(); } };
+  await Promise.all(Array.from({length: 8}, worker)); draw(); pre.textContent = "DIAG DONE\n" + pre.textContent;
 }
 
 /* ---------- rendering ---------- */
