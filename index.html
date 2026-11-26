@@ -174,6 +174,8 @@ function toHttp(uri, gw = GATEWAYS[gwIndex], dir = false) {
     let rest = uri.slice(7).replace(/^ipfs\//, "");
     let [path, query] = rest.split("?");
     if (dir && !path.endsWith("/") && !path.includes("/")) path += "/";
+    // cache.teia.rocks only serves whole files by CID, not files inside a folder, so folders go to the next gateway
+    if (gw === GATEWAYS[0] && path.includes("/")) gw = GATEWAYS[1];
     return `${gw}/ipfs/${path}${query ? "?" + query : ""}`;
   }
   if (uri.startsWith("onchfs://")) return "https://onchfs.fxhash2.xyz/" + uri.slice(9);
