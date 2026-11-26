@@ -84,6 +84,15 @@ select,.btn{min-height:44px;padding:0 14px;border:1px solid var(--line);border-r
 .prog[hidden]{display:none}
 details.other{padding:0 max(4vw,16px) 24px;color:var(--mute);font-size:14px}
 .foot{padding:0 max(4vw,16px) 32px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:var(--mute);font-size:13px}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:80vh;overflow:auto;background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -8px 30px rgba(0,0,0,.25);padding:16px max(4vw,16px) calc(16px + env(safe-area-inset-bottom));z-index:9;display:flex;flex-direction:column;gap:10px}
+.sheet[hidden]{display:none}
+.sheet h2{font-size:20px;margin:0;padding-right:56px}
+.sheet .x{position:absolute;top:10px;right:12px;width:44px;padding:0;font-size:20px}
+.sheet .btn{justify-content:center}
+.sheet ul{margin:0;padding-left:18px;font-size:14px}
+.only-share{display:none}
+.can-share .only-share{display:inline-flex}
+.can-share .no-share{display:none}
 .toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:20;font-size:14px;max-width:90vw}
 .toast[hidden]{display:none}
 @media(max-width:600px){.bar{gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}.bar .count{flex:1 1 100%;font-size:17px;display:flex;gap:8px;align-items:baseline}.bar .count small{display:inline}.bar .btn{flex:1 1 0;padding:0 8px;font-size:14px}.lb header{position:relative;gap:6px;padding:8px}.lb header .t{flex:1 1 100%}.lb header .btn:not(#lbClose){flex:1 1 auto;padding:0 8px;font-size:14px;justify-content:center}.nav{width:40px;height:56px}.top{padding-top:16px}}
@@ -121,13 +130,15 @@ details.other{padding:0 max(4vw,16px) 24px;color:var(--mute);font-size:14px}
 </div>
 
 <div class="drawer" id="drawer" hidden><h2 style="font-size:20px;margin-bottom:8px">Your set</h2>
-  <div class="controls" style="margin-bottom:8px"><button class="btn" id="eachSet" type="button">Download one by one</button><button class="btn" id="linksSet" type="button">Save link list</button></div>
+  <p class="sub only-share" style="font-size:14px;margin:0 0 8px">To show the set on Apple TV: Save to Photos, put the items in an album, then play that album from the Photos app on the TV (iCloud Photos on).</p>
+  <div class="controls" style="margin-bottom:8px"><button class="btn only-share" id="zipSet2" type="button">Download ZIP</button><button class="btn" id="eachSet" type="button">Download one by one</button><button class="btn" id="linksSet" type="button">Save link list</button></div>
   <div id="setList"></div></div>
 <div class="bar">
   <div class="count"><span id="setCount">0</span> in set<small id="setHint">Tap thumbnails to add them</small></div>
   <button class="btn" id="showSet" type="button" aria-expanded="false">Set list</button>
   <button class="btn" id="viewSet" type="button">View set</button>
-  <button class="btn primary" id="zipSet" type="button">Download ZIP</button>
+  <button class="btn primary only-share" id="photosSet" type="button">Save to Photos</button>
+  <button class="btn primary no-share" id="zipSet" type="button">Download ZIP</button>
   <button class="btn" id="clearSet" type="button">Clear</button>
   <div class="prog" id="prog" hidden><i></i></div>
 </div>
@@ -143,6 +154,16 @@ details.other{padding:0 max(4vw,16px) 24px;color:var(--mute);font-size:14px}
   </header>
   <div class="stage" id="stage"></div>
   <footer><div class="info" id="lbInfo"></div><a id="lbObjkt" href="#" target="_blank" rel="noopener">View on objkt</a></footer>
+</div>
+<div class="sheet" id="photos" hidden role="dialog" aria-modal="true" aria-labelledby="phTitle">
+  <h2 id="phTitle">Save to Photos</h2>
+  <button class="btn x" id="phClose" type="button" aria-label="Close">✕</button>
+  <p class="sub" style="margin:0;font-size:14px">After saving, put the items in an album in Photos. The Apple TV's Photos app can then play that album as a slideshow, as long as iCloud Photos is on.</p>
+  <div id="phStatus" role="status"></div>
+  <div class="prog" id="phProg"><i></i></div>
+  <button class="btn primary" id="phSave" type="button" disabled>Getting files ready…</button>
+  <button class="btn" id="phSkip" type="button" hidden>Skip these and continue</button>
+  <div id="phSkipped"></div>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -372,7 +393,7 @@ function setItems() { return [...set].map(byKey).filter(Boolean); }
 function renderSet() {
   const s = setItems(); $("setCount").textContent = s.length;
   $("setHint").textContent = s.length ? "Saved in this browser" : "Tap thumbnails to add them";
-  for (const id of ["viewSet", "zipSet", "eachSet", "linksSet", "clearSet"]) $(id).disabled = !s.length;
+  for (const id of ["viewSet", "zipSet", "zipSet2", "photosSet", "eachSet", "linksSet", "clearSet"]) $(id).disabled = !s.length;
   if (!$("drawer").hidden) $("setList").innerHTML = s.length ? s.map(i => `<div class="row" data-key="${esc(i.key)}">${i.thumb && !i.thumb.video ? `<img alt="" loading="lazy" src="${esc(toHttp(i.thumb.uri))}">` : `<div class="ph" style="position:static;width:48px;height:48px"></div>`}
     <div><b>${esc(i.name)}</b><div class="sub" style="font-size:13px">${esc(creatorLabel(i))} · ${esc(KIND_LABEL[i.kind])}${i.dims ? " · " + esc(i.dims) : ""}</div></div>
     <div class="acts"><a href="${esc(fullUrl(i))}" target="_blank" rel="noopener">Open</a><button type="button" data-act="dl">Download</button><button type="button" data-act="rm">Remove</button></div></div>`).join("") : `<p class="sub">Nothing in the set yet.</p>`;
@@ -425,12 +446,95 @@ async function downloadOne(i, viaShare = false) {
   try { const b = await fetchBlob(u); save(b, fileName(i, b.type)); return true; }
   catch (e) { window.open(toHttp(u), "_blank", "noopener"); toast(`Opened ${i.name} in a new tab to save it there.`); return false; }
 }
+/* ---------- save the set to Photos (phones: share sheet with files) ---------- */
+const PHOTOS_OK = /^(image\/(jpeg|png|gif|webp|heic|heif)|video\/(mp4|quicktime))$/;
+const canShareFiles = (() => { try { return touch && !!navigator.canShare && navigator.canShare({files: [new File([new Uint8Array([255, 216, 255])], "t.jpg", {type: "image/jpeg"})]}); } catch (e) { return false; } })();
+if (canShareFiles) document.documentElement.classList.add("can-share");
+async function sniff(b) {
+  const h = new Uint8Array(await b.slice(0, 12).arrayBuffer()); const at = (o, str) => [...str].every((c, n) => h[o + n] === c.charCodeAt(0));
+  if (h[0] === 0xff && h[1] === 0xd8) return "image/jpeg";
+  if (h[0] === 0x89 && at(1, "PNG")) return "image/png";
+  if (at(0, "GIF8")) return "image/gif";
+  if (at(0, "RIFF") && at(8, "WEBP")) return "image/webp";
+  if (at(4, "ftyp")) return at(8, "qt  ") ? "video/quicktime" : at(8, "heic") || at(8, "heix") || at(8, "mif1") ? "image/heic" : "video/mp4";
+  if (h[0] === 0x1a && h[1] === 0x45 && h[2] === 0xdf && h[3] === 0xa3) return "video/webm";
+  return "";
+}
+const PH_MAX_FILES = 10, PH_MAX_BYTES = 80 * 1048576;
+let ph = null;
+function phRender() {
+  const st = ph, total = st.items.length, b = st.batch;
+  const saved = st.saved, skipped = st.skipped.length;
+  $("phProg").firstElementChild.style.width = (100 * st.pos / Math.max(total, 1)) + "%";
+  const save = $("phSave"), skip = $("phSkip");
+  if (st.done) {
+    $("phStatus").textContent = `Done. ${saved} item${saved === 1 ? "" : "s"} sent to the share sheet${skipped ? `, ${skipped} skipped` : ""}.`;
+    save.hidden = false; save.disabled = false; save.textContent = "Close"; skip.hidden = true;
+  } else if (st.loading) {
+    $("phStatus").textContent = `Getting files ready: ${st.pos} of ${total}…`;
+    save.hidden = false; save.disabled = true; save.textContent = "Getting files ready…"; skip.hidden = true;
+  } else if (b) {
+    const mb = b.files.reduce((a, f) => a + f.size, 0) / 1048576;
+    $("phStatus").textContent = `${b.files.length} item${b.files.length === 1 ? "" : "s"} ready (${mb.toFixed(1)} MB). Tap Save, then pick "Save ${b.files.length === 1 ? "Image" : b.files.length + " Items"}" in the share sheet.${st.pos < total ? ` ${total - st.pos} more after this.` : ""}`;
+    save.hidden = false; save.disabled = false; save.textContent = st.tries ? `Save ${b.files.length} to Photos again` : `Save ${b.files.length} to Photos`; skip.hidden = !st.tries;
+  }
+  $("phSkipped").innerHTML = skipped ? `<p class="sub" style="margin:4px 0;font-size:14px">Not saved:</p><ul>${st.skipped.map(([i, why]) => `<li>${esc(i.name)}: ${esc(why)}</li>`).join("")}</ul>` : "";
+}
+async function phNext() {
+  const st = ph; st.batch = null; st.tries = 0;
+  if (st.pos >= st.items.length) { st.done = true; phRender(); return; }
+  st.loading = true; phRender();
+  const files = []; let bytes = 0;
+  const one = async () => {
+    while (st === ph && st.pos < st.items.length && files.length + st.inflight < PH_MAX_FILES && bytes < PH_MAX_BYTES) {
+      const i = st.items[st.pos++]; st.inflight++; phRender();
+      try {
+        const u = downloadUri(i); if (!u) throw new Error("no downloadable file");
+        const blob = await fetchBlob(u).catch(() => { throw new Error("the file couldn't be fetched"); });
+        let type = (blob.type || "").split(";")[0].trim().toLowerCase();
+        if (!PHOTOS_OK.test(type)) type = (await sniff(blob).catch(() => "")) || type;
+        if (!PHOTOS_OK.test(type)) { st.skipped.push([i, `Photos can't take this file type${type ? ` (${type})` : ""}`]); continue; }
+        const f = new File([blob], fileName(i, type), {type});
+        files.push({f, i, n: st.order++}); bytes += f.size;
+      } catch (e) { st.skipped.push([i, /^(no downloadable file|the file couldn't be fetched)$/.test(e.message) ? e.message : "something went wrong preparing it"]); }
+      finally { st.inflight--; }
+    }
+  };
+  await Promise.all([one(), one(), one()]);
+  if (st !== ph) return;
+  st.loading = false;
+  if (!files.length) return phNext();
+  files.sort((a, b) => a.n - b.n);
+  st.batch = {files: files.map(x => x.f), items: files.map(x => x.i)};
+  if (!navigator.canShare({files: st.batch.files})) {
+    for (const i of st.batch.items) st.skipped.push([i, "the share sheet wouldn't take it"]);
+    return phNext();
+  }
+  phRender();
+}
+function photosSet() {
+  const s = setItems(); if (!s.length) return;
+  if (!canShareFiles) { toast("This browser can't save to Photos, so here's the ZIP instead.", 5000); return zipSet(); }
+  ph = {items: s, pos: 0, order: 0, inflight: 0, saved: 0, skipped: [], batch: null, loading: false, done: false, tries: 0};
+  $("photos").hidden = false; phNext();
+}
+function phClose() { ph = null; $("photos").hidden = true; }
+$("phSave").addEventListener("click", async () => {
+  const st = ph; if (!st) return;
+  if (st.done) return phClose();
+  if (!st.batch) return;
+  // share() runs straight from the tap, because Safari only allows it during a user gesture
+  try { await navigator.share({files: st.batch.files}); if (st !== ph) return; st.saved += st.batch.files.length; phNext(); }
+  catch (e) { if (st !== ph) return; st.tries++; phRender(); if (e.name !== "AbortError") toast("The share sheet didn't open. Tap Save again.", 5000); }
+});
+$("phSkip").addEventListener("click", () => { const st = ph; if (!st || !st.batch) return; for (const i of st.batch.items) st.skipped.push([i, "skipped"]); phNext(); });
+$("phClose").addEventListener("click", phClose);
 function progress(done, total) { const p = $("prog"); p.hidden = !total; p.firstElementChild.style.width = total ? (100 * done / total) + "%" : "0"; }
 let JSZipLoad = null;
 function loadZip() { return JSZipLoad ||= new Promise((ok, no) => { if (window.JSZip) return ok(window.JSZip); const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"; s.onload = () => ok(window.JSZip); s.onerror = () => no(new Error("ZIP library didn't load")); document.head.append(s); }); }
 async function zipSet() {
   const s = setItems(); if (!s.length) return;
-  $("zipSet").disabled = true;
+  $("zipSet").disabled = $("zipSet2").disabled = true;
   try {
     const JSZip = await loadZip(); const zip = new JSZip(); const failed = []; let done = 0, bytes = 0; const used = new Set();
     const queue = [...s]; const work = async () => { while (queue.length) { const i = queue.shift();
@@ -447,7 +551,7 @@ async function zipSet() {
     save(blob, `${ACCOUNT_NAME.replace(/\W+/g, "-")}-set-${s.length}.zip`);
     $("status").textContent = failed.length ? `ZIP saved. ${failed.length} file${failed.length > 1 ? "s" : ""} couldn't be fetched; their links are in not-downloaded.txt inside it.` : `ZIP saved with ${s.length} file${s.length > 1 ? "s" : ""}.`;
   } catch (e) { $("status").textContent = `Couldn't build the ZIP (${e.message}). Try Download one by one, or Save link list.`; }
-  finally { progress(0, 0); $("zipSet").disabled = false; }
+  finally { progress(0, 0); $("zipSet").disabled = $("zipSet2").disabled = false; }
 }
 async function eachSet() {
   const s = setItems(); let ok = 0;
@@ -511,6 +615,8 @@ $("setList").addEventListener("click", e => { const b = e.target.closest("button
   if (b.dataset.act === "rm") { set.delete(key); saveSet(); syncCard(key); renderSet(); } else downloadOne(byKey(key), true); });
 $("viewSet").addEventListener("click", () => openViewer(setItems(), 0));
 $("zipSet").addEventListener("click", zipSet);
+$("zipSet2").addEventListener("click", zipSet);
+$("photosSet").addEventListener("click", photosSet);
 $("eachSet").addEventListener("click", eachSet);
 $("linksSet").addEventListener("click", () => { const s = setItems(); save(new Blob([linkList(s)], {type: "text/plain"}), "set-links.txt"); save(new Blob([toCsv(s)], {type: "text/csv"}), "set.csv"); });
 $("clearSet").addEventListener("click", () => { set.clear(); saveSet(); render(); toast("Set cleared."); });
@@ -521,7 +627,7 @@ $("stage").addEventListener("click", e => { if (e.target.closest(".nav.p")) step
 $("lbToggle").addEventListener("click", () => { const i = lbList[lbPos]; toggle(i.key); syncCard(i.key); renderSet(); $("lbToggle").textContent = set.has(i.key) ? "In set ✓" : "Add to set"; });
 $("lbDl").addEventListener("click", () => downloadOne(lbList[lbPos], true));
 $("lbPlay").addEventListener("click", () => { if (lbTimer) return stopPlay(); lbTimer = setInterval(() => step(1), 5000); $("lbPlay").textContent = "Pause"; });
-document.addEventListener("keydown", e => { if ($("lb").hidden) return; if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowRight") step(1); else if (e.key === "ArrowLeft") step(-1); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("photos").hidden) return phClose(); if ($("lb").hidden) return; if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowRight") step(1); else if (e.key === "ArrowLeft") step(-1); });
 
 const barRO = "ResizeObserver" in window ? new ResizeObserver(() => { const h = document.querySelector(".bar").offsetHeight; document.documentElement.style.setProperty("--barh", h + "px"); document.body.style.paddingBottom = (h + 24) + "px"; }) : null;
 if (barRO) barRO.observe(document.querySelector(".bar"));
