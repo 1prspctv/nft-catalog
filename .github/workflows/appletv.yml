@@ -1,0 +1,100 @@
+name: Apple TV app
+
+# Every push that touches the app gets a compile check on a cloud Mac.
+# Running it by hand with "Send to TestFlight" ticked signs the app and uploads it,
+# once the App Store Connect secrets are in place.
+on:
+  push:
+    branches: [main]
+    paths: [appletv/**, .github/workflows/appletv.yml]
+  workflow_dispatch:
+    inputs:
+      testflight:
+        description: Send to TestFlight
+        type: boolean
+        default: true
+
+env:
+  BUNDLE_ID: ${{ vars.TV_BUNDLE_ID || 'io.github.prspctv.nftslideshow' }}
+  UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.testflight }}
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Generate the Xcode project
+        working-directory: appletv
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Compile check (unsigned)
+        if: env.UPLOAD != 'true'
+        working-directory: appletv
+        run: |
+          if ! xcodebuild build -project Slideshow.xcodeproj -scheme Slideshow \
+            -destination 'generic/platform=tvOS' -configuration Release \
+            CODE_SIGNING_ALLOWED=NO PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" > build.log 2>&1; then
+            grep -E "error:" build.log | sort -u | head -60
+            tail -40 build.log
+            exit 1
+          fi
+          grep -E "warning:.*appletv/(Sources|Resources)" build.log | sort -u | head -40 || true
+          tail -3 build.log
+
+      - name: Check the TestFlight secrets
+        if: env.UPLOAD == 'true'
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          [ -n "$KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          [ -n "$TEAM_ID" ] || missing="$missing APPLE_TEAM_ID"
+          if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
+
+      - name: Archive and upload to TestFlight
+        if: env.UPLOAD == 'true'
+        working-directory: appletv
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey_$KEY_ID.p8"
+          printf '%s\n' "$KEY_P8" > "$KEY_PATH"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+          # Build numbers have to go up with each upload.
+          BUILD=$(( 100 + GITHUB_RUN_NUMBER ))
+          xcodebuild archive -project Slideshow.xcodeproj -scheme Slideshow \
+            -destination 'generic/platform=tvOS' -configuration Release \
+            -archivePath "$RUNNER_TEMP/Slideshow.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CURRENT_PROJECT_VERSION="$BUILD" \
+            "${AUTH[@]}" 2>&1 | tail -60
+          /usr/libexec/PlistBuddy -c "Add :method string app-store-connect" \
+            -c "Add :destination string upload" -c "Add :teamID string $TEAM_ID" \
+            -c "Add :signingStyle string automatic" -c "Add :manageAppVersionAndBuildNumber bool false" \
+            "$RUNNER_TEMP/export.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Slideshow.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" \
+            "${AUTH[@]}" 2>&1 | tail -60
+          echo "::notice::Uploaded build $BUILD. It appears in TestFlight once Apple finishes processing it."
+
+      - name: Remove the key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8

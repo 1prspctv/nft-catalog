@@ -1,0 +1,34 @@
+name: Slideshow
+options:
+  bundleIdPrefix: io.github.prspctv
+  deploymentTarget:
+    tvOS: "17.0"
+targets:
+  Slideshow:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Sources
+      - path: Resources
+    settings:
+      base:
+        PRODUCT_NAME: Slideshow
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.prspctv.nftslideshow
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "3"
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: 1prspctv
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        UIRequiredDeviceCapabilities: [arm64]
+        UIUserInterfaceStyle: Dark
+        LSApplicationCategoryType: public.app-category.entertainment
