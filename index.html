@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>1prspctv.tez collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: a quiet gallery wall; the art is the colour, the page stays out of the way.
+IDEA: a contact sheet on a light table; pick frames with a grease-pencil mark.
+PICTURE: the collection itself, a dense grid of thumbnails filling the screen.
+COLOUR and TYPE: near-black ground, warm white ink, one coral mark for "in the set". Space Grotesk + Inter.
+LAYOUT: slim header with search and filters, the grid, a set bar pinned to the bottom, a full-screen viewer.
+*/
+:root{color-scheme:light dark;--bg:light-dark(#f4f3ef,#121212);--panel:light-dark(#ffffff,#1c1c1c);--ink:light-dark(#151515,#f1efe9);--mute:light-dark(#66645e,#9d9a92);--line:light-dark(#dcd9d1,#2c2c2c);--mark:#ff5a36;--markink:#fff}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow-x:clip;padding-bottom:96px}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;font-weight:700;line-height:1.05;margin:0;text-wrap:balance}
+h1{font-size:clamp(28px,4vw,44px)}
+a{color:inherit}
+button,select,input{font:inherit;color:inherit}
+.top{padding:24px max(4vw,16px) 12px;display:grid;gap:14px}
+.sub{color:var(--mute)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls input[type=search]{flex:1 1 220px;min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:16px}
+select,.btn{min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer}
+.btn:hover{border-color:var(--mute)}
+.btn.primary{background:var(--mark);border-color:var(--mark);color:var(--markink);font-weight:600}
+.btn:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:transparent;cursor:pointer;font-size:14px}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.status{color:var(--mute);font-size:14px;min-height:1.5em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px;padding:8px max(4vw,16px) 24px}
+@media(max-width:600px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
+.card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.card.sel{outline:3px solid var(--mark);outline-offset:-1px}
+.pick{all:unset;cursor:pointer;display:block;aspect-ratio:1;background:light-dark(#e7e5df,#0c0c0c);position:relative}
+.pick:focus-visible{outline:3px solid var(--mark);outline-offset:-3px}
+.pick img,.pick video{width:100%;height:100%;object-fit:cover;display:block}
+.ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);font-size:13px;text-align:center;padding:12px}
+.tick{position:absolute;top:8px;left:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.45);border:2px solid #fff;display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px}
+.sel .tick{background:var(--mark);border-color:var(--mark)}
+.kind{position:absolute;bottom:8px;left:8px;font-size:12px;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff}
+.zoom{position:absolute;top:6px;right:6px;width:40px;height:40px;border-radius:10px;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:18px;line-height:1}
+.meta{padding:8px 10px 10px}
+.meta b{display:block;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta span{display:block;color:var(--mute);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.more{display:flex;justify-content:center;padding:0 0 24px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px max(4vw,16px);display:flex;flex-wrap:wrap;gap:8px;align-items:center;z-index:5}
+.bar .count{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:20px;margin-right:auto}
+.bar .count small{font:13px Inter,sans-serif;color:var(--mute);display:block}
+.drawer{position:fixed;left:0;right:0;bottom:var(--barh,66px);max-height:55vh;overflow:auto;background:var(--panel);border-top:1px solid var(--line);padding:12px max(4vw,16px);z-index:4}
+.drawer[hidden]{display:none}
+.row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.row img{width:48px;height:48px;object-fit:cover;border-radius:6px;background:var(--line)}
+.row .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.row .acts a,.row .acts button{font-size:13px;min-height:36px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.lb{position:fixed;inset:0;background:rgba(8,8,8,.96);color:#f1efe9;z-index:10;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+.lb[hidden]{display:none}
+.lb header,.lb footer{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px}
+.lb header .t{margin-right:auto;min-width:0}
+.lb header .t b{display:block;font-family:"Space Grotesk",sans-serif;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb header .t span{color:#a9a69e;font-size:13px}
+.lb .btn{background:#222;border-color:#333;color:#f1efe9;text-decoration:none;display:inline-flex;align-items:center}
+.lb .btn.primary{background:var(--mark);border-color:var(--mark)}
+.stage{position:relative;overflow:auto;display:grid;place-items:center}
+.stage img,.stage video{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.stage.actual img{max-width:none;max-height:none}
+.stage iframe{width:min(100%,1200px);height:100%;border:0;background:#fff}
+.stage .ph{position:static;color:#a9a69e}
+.nav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:64px;border:0;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font-size:26px;cursor:pointer}
+.nav.p{left:8px}.nav.n{right:8px}
+.lb footer{color:#a9a69e;font-size:13px}
+.lb footer .info{margin-right:auto;min-width:0;overflow-wrap:anywhere}
+.prog{height:4px;background:var(--line);border-radius:2px;overflow:hidden;flex:1 1 100%}
+.prog i{display:block;height:100%;width:0;background:var(--mark);transition:width .2s}
+.prog[hidden]{display:none}
+details.other{padding:0 max(4vw,16px) 24px;color:var(--mute);font-size:14px}
+.foot{padding:0 max(4vw,16px) 32px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:var(--mute);font-size:13px}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:20;font-size:14px;max-width:90vw}
+.toast[hidden]{display:none}
+@media(max-width:600px){.bar{gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}.bar .count{flex:1 1 100%;font-size:17px;display:flex;gap:8px;align-items:baseline}.bar .count small{display:inline}.bar .btn{flex:1 1 0;padding:0 8px;font-size:14px}.lb header{gap:6px;padding:8px}.lb header .t{flex:1 1 100%}.lb header .btn{flex:1 1 auto;padding:0 10px;font-size:14px}.nav{width:40px;height:56px}.top{padding-top:16px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <h1 id="title">1prspctv.tez collection</h1>
+    <div class="sub" id="summary">Loading the collection from the Tezos blockchain…</div>
+  </div>
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search name, creator or collection" aria-label="Search">
+    <select id="sort" aria-label="Sort">
+      <option value="recent">Recently acquired</option>
+      <option value="oldest">First acquired</option>
+      <option value="name">Name A to Z</option>
+      <option value="creator">Creator A to Z</option>
+    </select>
+    <select id="gw" aria-label="IPFS gateway"></select>
+    <button class="btn" id="selAll" type="button">Add all shown</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="status" id="status" role="status"></div>
+</div>
+<div class="grid" id="grid"></div>
+<div class="more"><button class="btn" id="moreBtn" type="button" hidden>Show more</button></div>
+<details class="other" id="other" hidden><summary>Other tokens in this wallet, not artworks</summary><ul id="otherList"></ul></details>
+<div class="foot">
+  <span>Catalog file:</span>
+  <button class="btn" id="expJson" type="button">Export JSON</button>
+  <button class="btn" id="expCsv" type="button">Export CSV</button>
+  <span>Data from TzKT and objkt. Media from IPFS.</span>
+</div>
+
+<div class="drawer" id="drawer" hidden><h2 style="font-size:20px;margin-bottom:8px">Your set</h2>
+  <div class="controls" style="margin-bottom:8px"><button class="btn" id="eachSet" type="button">Download one by one</button><button class="btn" id="linksSet" type="button">Save link list</button></div>
+  <div id="setList"></div></div>
+<div class="bar">
+  <div class="count"><span id="setCount">0</span> in set<small id="setHint">Tap thumbnails to add them</small></div>
+  <button class="btn" id="showSet" type="button" aria-expanded="false">Set list</button>
+  <button class="btn" id="viewSet" type="button">View set</button>
+  <button class="btn primary" id="zipSet" type="button">Download ZIP</button>
+  <button class="btn" id="clearSet" type="button">Clear</button>
+  <div class="prog" id="prog" hidden><i></i></div>
+</div>
+
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Viewer">
+  <header>
+    <div class="t"><b id="lbName"></b><span id="lbBy"></span></div>
+    <button class="btn" id="lbPlay" type="button">Slideshow</button>
+    <button class="btn" id="lbToggle" type="button">Add to set</button>
+    <button class="btn" id="lbDl" type="button">Download</button>
+    <a class="btn" id="lbOpen" href="#" target="_blank" rel="noopener">Open original</a>
+    <button class="btn" id="lbClose" type="button" aria-label="Close viewer">Close</button>
+  </header>
+  <div class="stage" id="stage"></div>
+  <footer><div class="info" id="lbInfo"></div><a id="lbObjkt" href="#" target="_blank" rel="noopener">View on objkt</a></footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+{
+const ACCOUNT = "tz1VoGn5XyDDbTQ5J2dEeWTMszA9H2xsQUrt";
+const ACCOUNT_NAME = "1prspctv.tez";
+const TZKT = "https://api.tzkt.io";
+const OBJKT = "https://data.objkt.com/v3/graphql";
+const GATEWAYS = ["https://ipfs.io","https://dweb.link","https://w3s.link","https://gateway.pinata.cloud","https://nftstorage.link"];
+const HEN_PLACEHOLDER = "QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc";
+const DOMAINS_CONTRACT = "KT1GBZmSxmnKJXGMdMLbugPfLyUPmuLSMwKS";
+const PAGE = 120;
+const SKEY = "nftset:" + ACCOUNT, GKEY = "nftgw";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+let items = [], others = [], shown = [], limit = PAGE;
+let set = new Set(store.get(SKEY, []));
+let kindFilter = "all";
+let gwIndex = Math.max(0, GATEWAYS.indexOf(store.get(GKEY, GATEWAYS[0])));
+let lbList = [], lbPos = 0, lbTimer = null;
+
+/* ---------- URIs ---------- */
+function toHttp(uri, gw = GATEWAYS[gwIndex], dir = false) {
+  if (!uri || typeof uri !== "string") return "";
+  if (uri.startsWith("ipfs://")) {
+    let rest = uri.slice(7).replace(/^ipfs\//, "");
+    let [path, query] = rest.split("?");
+    if (dir && !path.endsWith("/") && !path.includes("/")) path += "/";
+    return `${gw}/ipfs/${path}${query ? "?" + query : ""}`;
+  }
+  if (uri.startsWith("onchfs://")) return "https://onchfs.fxhash2.xyz/" + uri.slice(9);
+  if (uri.startsWith("ar://")) return "https://arweave.net/" + uri.slice(5);
+  if (/^(https?:|data:)/.test(uri)) return uri;
+  if (/^(Qm|baf)/.test(uri)) return `${gw}/ipfs/${uri}`;
+  return "";
+}
+const cidOf = u => (u || "").replace(/^ipfs:\/\//, "").split(/[/?]/)[0];
+function area(f) { const m = /(\d+)\s*x\s*(\d+)/i.exec(f?.dimensions?.value || ""); return m ? (+m[1]) * (+m[2]) : 0; }
+function dims(f) { return f?.dimensions?.value ? String(f.dimensions.value).replace(/\s/g, "") : ""; }
+function kindOf(mime, m, contractAlias) {
+  mime = (mime || "").toLowerCase();
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "image/gif") return "gif";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("model/")) return "3d";
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "application/x-directory" || mime.includes("html") || m?.generatorUri || /fxhash/i.test(m?.artifactUri || "") || /fxhash/i.test(contractAlias || "")) return "interactive";
+  return mime ? "other" : "unknown";
+}
+const KIND_LABEL = {image:"Image",gif:"GIF",video:"Video",interactive:"Interactive",audio:"Audio","3d":"3D",pdf:"PDF",other:"Other",unknown:"Unknown type",none:"No media"};
+const EXT = {"image/jpeg":"jpg","image/jpg":"jpg","image/png":"png","image/gif":"gif","image/webp":"webp","image/svg+xml":"svg","image/avif":"avif","image/tiff":"tif","video/mp4":"mp4","video/webm":"webm","video/quicktime":"mov","audio/mpeg":"mp3","audio/wav":"wav","audio/ogg":"ogg","model/gltf-binary":"glb","application/pdf":"pdf","text/html":"html"};
+
+/* Pick the highest-resolution file for a token */
+function bestFile(m, alias) {
+  const fm = (m.formats || []).filter(f => f && f.uri);
+  const art = m.artifactUri || "";
+  const artFmt = fm.find(f => f.uri === art) || null;
+  let pick = artFmt || (art ? {uri: art, mimeType: fm[0]?.mimeType || m.mime || ""} : fm[0] || null);
+  for (const f of fm) if (area(f) > area(pick) && /^(image|video)\//.test(f.mimeType || "")) pick = f;
+  if (!pick) return null;
+  const mime = pick.mimeType || m.mime || "";
+  const kind = kindOf(mime, m, alias);
+  return {uri: pick.uri, mime, kind, dims: dims(pick), size: +(pick.fileSize || 0) || 0};
+}
+function thumbOf(m, best) {
+  const good = u => u && !u.includes(HEN_PLACEHOLDER);
+  if (good(m.thumbnailUri)) return {uri: m.thumbnailUri, video: false};
+  if (good(m.displayUri)) return {uri: m.displayUri, video: false};
+  if (best && /^(image|gif)$/.test(best.kind)) return {uri: best.uri, video: false};
+  if (best && best.kind === "video") return {uri: best.uri, video: true};
+  return null;
+}
+
+/* ---------- loading ---------- */
+async function getJSON(url, opts, ms = 30000) {
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
+  try { const r = await fetch(url, {...opts, signal: c.signal}); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+async function loadTzkt() {
+  const out = [];
+  for (let off = 0; ; off += 500) {
+    $("status").textContent = `Reading the wallet… ${out.length} tokens so far`;
+    const j = await getJSON(`${TZKT}/v1/tokens/balances?account=${ACCOUNT}&balance.gt=0&token.standard=fa2&limit=500&offset=${off}&sort.asc=id&select=balance,token,firstTime,lastTime`);
+    out.push(...j);
+    if (j.length < 500) break;
+  }
+  return out;
+}
+async function loadObjkt() {
+  const map = new Map();
+  try {
+    for (let off = 0; off < 20000; off += 500) {
+      const q = `{token_holder(where:{holder_address:{_eq:"${ACCOUNT}"},quantity:{_gt:0}},limit:500,offset:${off}){token{fa_contract token_id name mime artifact_uri display_uri thumbnail_uri creators{creator_address holder{alias tzdomain}}}}}`;
+      const j = await getJSON(OBJKT, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({query: q})}, 25000);
+      const rows = j?.data?.token_holder || [];
+      for (const r of rows) if (r.token) map.set(r.token.fa_contract + ":" + r.token.token_id, r.token);
+      if (rows.length < 500) break;
+    }
+  } catch (e) { console.warn("objkt enrichment skipped", e); }
+  return map;
+}
+async function resolveNames(addrs) {
+  const names = new Map(); const list = [...addrs].filter(a => /^(tz|KT)/.test(a));
+  for (let i = 0; i < list.length; i += 40) {
+    const chunk = list.slice(i, i + 40).join(",");
+    try { for (const d of await getJSON(`${TZKT}/v1/domains?address.in=${chunk}&reverse=true&select=address,name&limit=100`)) if (d.name) names.set(d.address, d.name); } catch (e) {}
+    try { for (const a of await getJSON(`${TZKT}/v1/accounts?address.in=${chunk}&select=address,alias&limit=100`)) if (a.alias && !names.has(a.address)) names.set(a.address, a.alias); } catch (e) {}
+  }
+  return names;
+}
+const short = a => a && a.length > 14 ? a.slice(0, 6) + "…" + a.slice(-4) : (a || "");
+
+function build(balances, ob) {
+  const arts = [], rest = [];
+  for (const b of balances) {
+    const t = b.token || {}; const contract = t.contract?.address || ""; const alias = t.contract?.alias || "";
+    const key = contract + ":" + t.tokenId; const o = ob.get(key);
+    let m = t.metadata || {};
+    if (!t.metadata && o) m = {name: o.name, artifactUri: o.artifact_uri, displayUri: o.display_uri, thumbnailUri: o.thumbnail_uri, mime: o.mime};
+    if (+(m.decimals || 0) > 0 || contract === DOMAINS_CONTRACT) { rest.push(m.name || m.symbol || key); continue; }
+    if (o && !m.mime && !(m.formats || []).length && o.mime) m = {...m, mime: o.mime};
+    const best = bestFile(m, alias);
+    let creatorAddr = o?.creators?.[0]?.creator_address || (Array.isArray(m.creators) ? m.creators[0] : "") || "";
+    let creatorName = o?.creators?.[0]?.holder?.alias || o?.creators?.[0]?.holder?.tzdomain || "";
+    if (creatorAddr && !/^(tz|KT)/.test(creatorAddr)) { creatorName = creatorAddr; creatorAddr = ""; }
+    const still = best && best.kind === "interactive" ? (m.displayUri || "") : "";
+    arts.push({
+      key, contract, tokenId: String(t.tokenId), collection: alias, name: m.name || o?.name || `#${t.tokenId}`,
+      creatorAddr, creatorName, balance: b.balance, edition: t.totalSupply, acquired: b.firstTime, changed: b.lastTime,
+      kind: best ? best.kind : "none", mime: best?.mime || "", dims: best?.dims || "",
+      fullUri: best?.uri || "", stillUri: still, thumb: thumbOf(m, best)
+    });
+  }
+  return {arts, rest};
+}
+
+async function load() {
+  try {
+    const [bal, ob] = await Promise.all([loadTzkt(), loadObjkt()]);
+    let {arts, rest} = build(bal, ob);
+    items = arts; others = rest; render();
+    $("status").textContent = "Looking up creator names…";
+    const need = new Set(items.filter(i => i.creatorAddr && !i.creatorName).map(i => i.creatorAddr));
+    if (need.size) { const names = await resolveNames(need); for (const i of items) if (!i.creatorName && names.has(i.creatorAddr)) i.creatorName = names.get(i.creatorAddr); }
+    $("status").textContent = ""; render();
+  } catch (e) {
+    $("summary").textContent = "Couldn't reach the Tezos data service. Check your connection and reload the page.";
+    $("status").textContent = String(e?.message || e);
+  }
+}
+
+/* ---------- rendering ---------- */
+const creatorLabel = i => i.creatorName || (i.creatorAddr ? short(i.creatorAddr) : (i.collection || "Unknown creator"));
+function summarize() {
+  const c = {}; for (const i of items) c[i.kind] = (c[i.kind] || 0) + 1;
+  const parts = Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${KIND_LABEL[k].toLowerCase()}`);
+  $("summary").textContent = `${items.length} pieces owned by ${ACCOUNT_NAME}: ${parts.join(", ")}.`;
+  const kinds = ["all", ...Object.keys(c).sort((a, b) => c[b] - c[a])];
+  $("chips").innerHTML = kinds.map(k => `<button class="chip" type="button" data-k="${k}" aria-pressed="${k === kindFilter}">${k === "all" ? "All" : KIND_LABEL[k]} <span class="sub">${k === "all" ? items.length : c[k]}</span></button>`).join("");
+  if (others.length) { $("other").hidden = false; $("otherList").innerHTML = others.map(n => `<li>${esc(n)}</li>`).join(""); }
+}
+function filtered() {
+  const q = $("q").value.trim().toLowerCase();
+  let list = items.filter(i => (kindFilter === "all" || i.kind === kindFilter) &&
+    (!q || [i.name, creatorLabel(i), i.creatorAddr, i.collection, i.tokenId].some(s => String(s || "").toLowerCase().includes(q))));
+  const s = $("sort").value;
+  const by = {recent: (a, b) => (b.acquired || "").localeCompare(a.acquired || ""), oldest: (a, b) => (a.acquired || "").localeCompare(b.acquired || ""),
+    name: (a, b) => a.name.localeCompare(b.name), creator: (a, b) => creatorLabel(a).localeCompare(creatorLabel(b)) || a.name.localeCompare(b.name)}[s];
+  return list.sort(by);
+}
+function thumbHtml(i, cls = "") {
+  if (!i.thumb) return `<div class="ph">${esc(KIND_LABEL[i.kind])}</div>`;
+  const src = toHttp(i.thumb.uri);
+  if (i.thumb.video) return `<video class="${cls}" muted playsinline preload="none" data-src="${esc(src)}#t=0.5" data-uri="${esc(i.thumb.uri)}"></video>`;
+  return `<img class="${cls}" loading="lazy" decoding="async" alt="" src="${esc(src)}" data-uri="${esc(i.thumb.uri)}" data-try="0">`;
+}
+function render() {
+  summarize();
+  shown = filtered();
+  const vis = shown.slice(0, limit);
+  $("grid").innerHTML = vis.map((i, n) => `<div class="card${set.has(i.key) ? " sel" : ""}" data-key="${esc(i.key)}">
+    <button class="pick" type="button" aria-pressed="${set.has(i.key)}" aria-label="${esc(i.name)}, add to set">${thumbHtml(i)}<span class="tick">${set.has(i.key) ? "✓" : ""}</span><span class="kind">${esc(KIND_LABEL[i.kind])}</span></button>
+    <button class="zoom" type="button" data-n="${n}" aria-label="View ${esc(i.name)} full size">⤢</button>
+    <div class="meta"><b title="${esc(i.name)}">${esc(i.name)}</b><span>${esc(creatorLabel(i))}</span></div></div>`).join("");
+  $("moreBtn").hidden = shown.length <= limit;
+  $("moreBtn").textContent = `Show more (${shown.length - limit} left)`;
+  if (!shown.length && items.length) $("grid").innerHTML = `<p class="sub">Nothing matches that search.</p>`;
+  observeVideos(); renderSet();
+}
+/* image fallback across gateways */
+document.addEventListener("error", e => {
+  const el = e.target; if (!(el instanceof HTMLImageElement) || !el.dataset.uri) return;
+  const n = +el.dataset.try + 1; if (n >= GATEWAYS.length) { el.replaceWith(Object.assign(document.createElement("div"), {className: "ph", textContent: "Preview unavailable"})); return; }
+  el.dataset.try = n; el.src = toHttp(el.dataset.uri, GATEWAYS[(gwIndex + n) % GATEWAYS.length]);
+}, true);
+const vio = "IntersectionObserver" in window ? new IntersectionObserver(es => { for (const en of es) if (en.isIntersecting) { const v = en.target; v.src = v.dataset.src; v.preload = "metadata"; vio.unobserve(v); } }, {rootMargin: "300px"}) : null;
+function observeVideos() { for (const v of document.querySelectorAll("video[data-src]:not([src])")) vio ? vio.observe(v) : (v.src = v.dataset.src); }
+const moreIo = "IntersectionObserver" in window ? new IntersectionObserver(es => { if (es[0].isIntersecting && !$("moreBtn").hidden) { limit += PAGE; render(); } }, {rootMargin: "600px"}) : null;
+if (moreIo) moreIo.observe($("moreBtn"));
+
+/* ---------- set ---------- */
+const byKey = k => items.find(i => i.key === k);
+function saveSet() { store.set(SKEY, [...set]); }
+function toggle(key) { set.has(key) ? set.delete(key) : set.add(key); saveSet(); }
+function setItems() { return [...set].map(byKey).filter(Boolean); }
+function renderSet() {
+  const s = setItems(); $("setCount").textContent = s.length;
+  $("setHint").textContent = s.length ? "Saved in this browser" : "Tap thumbnails to add them";
+  for (const id of ["viewSet", "zipSet", "eachSet", "linksSet", "clearSet"]) $(id).disabled = !s.length;
+  if (!$("drawer").hidden) $("setList").innerHTML = s.length ? s.map(i => `<div class="row" data-key="${esc(i.key)}">${i.thumb && !i.thumb.video ? `<img alt="" loading="lazy" src="${esc(toHttp(i.thumb.uri))}">` : `<div class="ph" style="position:static;width:48px;height:48px"></div>`}
+    <div><b>${esc(i.name)}</b><div class="sub" style="font-size:13px">${esc(creatorLabel(i))} · ${esc(KIND_LABEL[i.kind])}${i.dims ? " · " + esc(i.dims) : ""}</div></div>
+    <div class="acts"><a href="${esc(fullUrl(i))}" target="_blank" rel="noopener">Open</a><button type="button" data-act="dl">Download</button><button type="button" data-act="rm">Remove</button></div></div>`).join("") : `<p class="sub">Nothing in the set yet.</p>`;
+}
+function syncCard(key) {
+  const c = document.querySelector(`.card[data-key="${CSS.escape(key)}"]`); if (!c) return;
+  const on = set.has(key); c.classList.toggle("sel", on); c.querySelector(".pick").setAttribute("aria-pressed", on); c.querySelector(".tick").textContent = on ? "✓" : "";
+}
+
+/* ---------- files ---------- */
+const downloadUri = i => i.kind === "interactive" ? (i.stillUri || "") : i.fullUri;
+const fullUrl = (i, gw) => toHttp(i.fullUri, gw, i.kind === "interactive");
+const slug = s => String(s || "untitled").normalize("NFKD").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "untitled";
+function fileName(i, mime) {
+  const ext = EXT[(mime || i.mime || "").split(";")[0].trim()] || (i.kind === "interactive" ? "png" : "bin");
+  return `${slug(i.name)}_${i.contract.slice(0, 8)}-${i.tokenId}.${ext}`;
+}
+async function fetchBlob(uri) {
+  let err;
+  for (let n = 0; n < GATEWAYS.length; n++) {
+    const url = toHttp(uri, GATEWAYS[(gwIndex + n) % GATEWAYS.length]);
+    if (!url) break;
+    try { const r = await fetch(url); if (r.ok) return await r.blob(); err = new Error("HTTP " + r.status); } catch (e) { err = e; }
+    if (!uri.startsWith("ipfs://")) break;
+  }
+  throw err || new Error("No file");
+}
+function save(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
+function toast(t, ms = 3500) { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, ms); }
+let ready = null;
+const touch = matchMedia("(pointer:coarse)").matches;
+async function downloadOne(i, viaShare = false) {
+  const u = downloadUri(i);
+  if (!u) { toast(`${i.name} has no downloadable file.`); return false; }
+  if (viaShare && touch && navigator.canShare) {
+    if (ready && ready.key === i.key) {
+      try { await navigator.share({files: [ready.file]}); return true; }
+      catch (e) { if (e.name === "AbortError") return false; save(ready.file, ready.file.name); return true; }
+    }
+    try {
+      const b = await fetchBlob(u); const f = new File([b], fileName(i, b.type), {type: b.type || "application/octet-stream"});
+      if (!navigator.canShare({files: [f]})) { save(b, f.name); return true; }
+      ready = {key: i.key, file: f};
+      try { await navigator.share({files: [f]}); return true; }
+      catch (e) { if (e.name !== "AbortError") toast("File ready. Tap Save again to save it to Photos or Files.", 5000); return false; }
+    } catch (e) { window.open(toHttp(u), "_blank", "noopener"); toast(`Opened ${i.name} in a new tab to save it there.`); return false; }
+  }
+  try { const b = await fetchBlob(u); save(b, fileName(i, b.type)); return true; }
+  catch (e) { window.open(toHttp(u), "_blank", "noopener"); toast(`Opened ${i.name} in a new tab to save it there.`); return false; }
+}
+function progress(done, total) { const p = $("prog"); p.hidden = !total; p.firstElementChild.style.width = total ? (100 * done / total) + "%" : "0"; }
+let JSZipLoad = null;
+function loadZip() { return JSZipLoad ||= new Promise((ok, no) => { if (window.JSZip) return ok(window.JSZip); const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"; s.onload = () => ok(window.JSZip); s.onerror = () => no(new Error("ZIP library didn't load")); document.head.append(s); }); }
+async function zipSet() {
+  const s = setItems(); if (!s.length) return;
+  $("zipSet").disabled = true;
+  try {
+    const JSZip = await loadZip(); const zip = new JSZip(); const failed = []; let done = 0, bytes = 0; const used = new Set();
+    const queue = [...s]; const work = async () => { while (queue.length) { const i = queue.shift();
+      const u = downloadUri(i);
+      try { if (!u) throw new Error("no file"); const b = await fetchBlob(u); let name = fileName(i, b.type); while (used.has(name)) name = "x" + name; used.add(name); zip.file(name, await b.arrayBuffer()); bytes += b.size; }
+      catch (e) { failed.push(i); }
+      if (i.kind === "interactive") zip.file(`${slug(i.name)}_${i.contract.slice(0, 8)}-${i.tokenId}_live-link.txt`, `${i.name}\nLive interactive version:\n${fullUrl(i)}\n`);
+      done++; progress(done, s.length); $("status").textContent = `Fetching ${done} of ${s.length} (${(bytes / 1048576).toFixed(1)} MB)…`; } };
+    await Promise.all([work(), work(), work(), work()]);
+    zip.file("set.csv", toCsv(s));
+    if (failed.length) zip.file("not-downloaded.txt", failed.map(i => `${i.name}\t${fullUrl(i)}`).join("\n"));
+    $("status").textContent = "Building the ZIP…";
+    const blob = await zip.generateAsync({type: "blob", compression: "STORE"}, m => progress(m.percent, 100));
+    save(blob, `${ACCOUNT_NAME.replace(/\W+/g, "-")}-set-${s.length}.zip`);
+    $("status").textContent = failed.length ? `ZIP saved. ${failed.length} file${failed.length > 1 ? "s" : ""} couldn't be fetched; their links are in not-downloaded.txt inside it.` : `ZIP saved with ${s.length} file${s.length > 1 ? "s" : ""}.`;
+  } catch (e) { $("status").textContent = `Couldn't build the ZIP (${e.message}). Try Download one by one, or Save link list.`; }
+  finally { progress(0, 0); $("zipSet").disabled = false; }
+}
+async function eachSet() {
+  const s = setItems(); let ok = 0;
+  for (let n = 0; n < s.length; n++) { progress(n, s.length); $("status").textContent = `Downloading ${n + 1} of ${s.length}…`; if (await downloadOne(s[n])) ok++; await new Promise(r => setTimeout(r, 400)); }
+  progress(0, 0); $("status").textContent = `${ok} of ${s.length} downloaded.`;
+}
+function linkList(s) { return s.map(i => fullUrl(i)).join("\n") + "\n"; }
+function csvCell(v) { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
+function toCsv(list) {
+  const head = ["name","creator","creator_address","collection","contract","token_id","type","mime","dimensions","full_res_url","download_url","owned","edition_size","acquired","objkt_url"];
+  return [head.join(","), ...list.map(i => [i.name, i.creatorName, i.creatorAddr, i.collection, i.contract, i.tokenId, KIND_LABEL[i.kind], i.mime, i.dims, fullUrl(i), downloadUri(i) ? toHttp(downloadUri(i)) : "", i.balance, i.edition, i.acquired, objktUrl(i)].map(csvCell).join(","))].join("\n") + "\n";
+}
+const objktUrl = i => `https://objkt.com/tokens/${i.contract}/${i.tokenId}`;
+function exportJson() { const data = items.map(i => ({...i, fullResUrl: fullUrl(i), downloadUrl: downloadUri(i) ? toHttp(downloadUri(i)) : "", objktUrl: objktUrl(i)})); save(new Blob([JSON.stringify({account: ACCOUNT, name: ACCOUNT_NAME, exported: new Date().toISOString(), count: data.length, tokens: data}, null, 1)], {type: "application/json"}), `${ACCOUNT_NAME}-catalog.json`); }
+
+/* ---------- viewer ---------- */
+function openViewer(list, pos) { lbList = list; lbPos = pos; $("lb").hidden = false; document.body.style.overflow = "hidden"; show(); $("lbClose").focus(); }
+function closeViewer() { stopPlay(); $("lb").hidden = true; $("stage").innerHTML = ""; document.body.style.overflow = ""; }
+function show() {
+  const i = lbList[lbPos]; if (!i) return; const st = $("stage"); st.classList.remove("actual");
+  $("lbName").textContent = i.name; $("lbBy").textContent = `${creatorLabel(i)} · ${lbPos + 1} of ${lbList.length}`;
+  $("lbToggle").textContent = set.has(i.key) ? "Remove from set" : "Add to set";
+  $("lbOpen").href = fullUrl(i); $("lbObjkt").href = objktUrl(i);
+  $("lbDl").disabled = !downloadUri(i); $("lbDl").textContent = touch ? (i.kind === "interactive" ? "Save still" : "Save") : (i.kind === "interactive" ? "Download still" : "Download");
+  const url = fullUrl(i); let info = [KIND_LABEL[i.kind], i.mime, i.dims && i.dims + " px", i.collection].filter(Boolean).join(" · ");
+  $("lbInfo").textContent = info;
+  const nav = `<button class="nav p" type="button" aria-label="Previous">‹</button><button class="nav n" type="button" aria-label="Next">›</button>`;
+  if (!url) st.innerHTML = `<div class="ph">No media file is listed for this token.</div>` + nav;
+  else if (i.kind === "video") st.innerHTML = `<video controls autoplay loop playsinline src="${esc(url)}"></video>` + nav;
+  else if (i.kind === "audio") st.innerHTML = `<div>${i.thumb ? `<img alt="" src="${esc(toHttp(i.thumb.uri))}">` : ""}<audio controls autoplay src="${esc(url)}"></audio></div>` + nav;
+  else if (i.kind === "interactive") st.innerHTML = `<iframe sandbox="allow-scripts" src="${esc(url)}" title="${esc(i.name)}"></iframe>` + nav;
+  else if (["image", "gif", "unknown", "other"].includes(i.kind)) {
+    st.innerHTML = `<img alt="${esc(i.name)}" src="${esc(url)}" data-uri="${esc(i.fullUri)}" data-try="0">` + nav;
+    const img = st.querySelector("img");
+    img.onload = () => { $("lbInfo").textContent = [KIND_LABEL[i.kind], i.mime, `${img.naturalWidth}×${img.naturalHeight} px`, i.collection].filter(Boolean).join(" · ") + (img.naturalWidth > st.clientWidth || img.naturalHeight > st.clientHeight ? " · click image for actual size" : ""); };
+    img.onclick = () => st.classList.toggle("actual");
+    if (i.kind === "unknown" || i.kind === "other") img.addEventListener("error", () => { if (+img.dataset.try >= GATEWAYS.length - 1) st.innerHTML = `<video controls autoplay loop playsinline src="${esc(url)}"></video>` + nav; });
+  } else st.innerHTML = `<div class="ph">This ${esc(KIND_LABEL[i.kind])} piece can't be previewed here. Use Open original.</div>` + nav;
+  fetch(toHttp(downloadUri(i) || i.fullUri), {method: "HEAD"}).then(r => { const n = +r.headers.get("content-length"); if (n && lbList[lbPos] === i) $("lbInfo").textContent += ` · ${(n / 1048576).toFixed(n > 1048576 ? 1 : 2)} MB`; }).catch(() => {});
+}
+function step(d) { if (!lbList.length) return; lbPos = (lbPos + d + lbList.length) % lbList.length; show(); }
+function stopPlay() { clearInterval(lbTimer); lbTimer = null; $("lbPlay").textContent = "Slideshow"; }
+
+/* ---------- events ---------- */
+$("grid").addEventListener("click", e => {
+  const card = e.target.closest(".card"); if (!card) return;
+  if (e.target.closest(".zoom")) { openViewer(shown, +e.target.closest(".zoom").dataset.n); return; }
+  if (e.target.closest(".pick")) { toggle(card.dataset.key); syncCard(card.dataset.key); renderSet(); }
+});
+$("chips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (!b) return; kindFilter = b.dataset.k; limit = PAGE; render(); });
+let qt; $("q").addEventListener("input", () => { clearTimeout(qt); qt = setTimeout(() => { limit = PAGE; render(); }, 150); });
+$("sort").addEventListener("change", () => { limit = PAGE; render(); });
+$("gw").innerHTML = GATEWAYS.map((g, n) => `<option value="${n}"${n === gwIndex ? " selected" : ""}>Gateway: ${g.replace("https://", "")}</option>`).join("");
+$("gw").addEventListener("change", e => { gwIndex = +e.target.value; store.set(GKEY, GATEWAYS[gwIndex]); render(); });
+$("moreBtn").addEventListener("click", () => { limit += PAGE; render(); });
+$("selAll").addEventListener("click", () => { for (const i of shown) set.add(i.key); saveSet(); render(); toast(`${shown.length} added. The set now has ${set.size}.`); });
+$("showSet").addEventListener("click", () => { const d = $("drawer"); d.hidden = !d.hidden; $("showSet").setAttribute("aria-expanded", !d.hidden); renderSet(); });
+$("setList").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const key = b.closest(".row").dataset.key;
+  if (b.dataset.act === "rm") { set.delete(key); saveSet(); syncCard(key); renderSet(); } else downloadOne(byKey(key), true); });
+$("viewSet").addEventListener("click", () => openViewer(setItems(), 0));
+$("zipSet").addEventListener("click", zipSet);
+$("eachSet").addEventListener("click", eachSet);
+$("linksSet").addEventListener("click", () => { const s = setItems(); save(new Blob([linkList(s)], {type: "text/plain"}), "set-links.txt"); save(new Blob([toCsv(s)], {type: "text/csv"}), "set.csv"); });
+$("clearSet").addEventListener("click", () => { set.clear(); saveSet(); render(); toast("Set cleared."); });
+$("expJson").addEventListener("click", exportJson);
+$("expCsv").addEventListener("click", () => save(new Blob([toCsv(items)], {type: "text/csv"}), `${ACCOUNT_NAME}-catalog.csv`));
+$("lbClose").addEventListener("click", closeViewer);
+$("stage").addEventListener("click", e => { if (e.target.closest(".nav.p")) step(-1); else if (e.target.closest(".nav.n")) step(1); });
+$("lbToggle").addEventListener("click", () => { const i = lbList[lbPos]; toggle(i.key); syncCard(i.key); renderSet(); $("lbToggle").textContent = set.has(i.key) ? "Remove from set" : "Add to set"; });
+$("lbDl").addEventListener("click", () => downloadOne(lbList[lbPos], true));
+$("lbPlay").addEventListener("click", () => { if (lbTimer) return stopPlay(); lbTimer = setInterval(() => step(1), 5000); $("lbPlay").textContent = "Pause"; });
+document.addEventListener("keydown", e => { if ($("lb").hidden) return; if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowRight") step(1); else if (e.key === "ArrowLeft") step(-1); });
+
+const barRO = "ResizeObserver" in window ? new ResizeObserver(() => { const h = document.querySelector(".bar").offsetHeight; document.documentElement.style.setProperty("--barh", h + "px"); document.body.style.paddingBottom = (h + 24) + "px"; }) : null;
+if (barRO) barRO.observe(document.querySelector(".bar"));
+renderSet();
+load();
+}
+</script>
+</body>
+</html>
