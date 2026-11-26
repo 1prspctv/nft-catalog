@@ -152,7 +152,7 @@ const ACCOUNT = "tz1VoGn5XyDDbTQ5J2dEeWTMszA9H2xsQUrt";
 const ACCOUNT_NAME = "1prspctv.tez";
 const TZKT = "https://api.tzkt.io";
 const OBJKT = "https://data.objkt.com/v3/graphql";
-const GATEWAYS = ["https://ipfs.io","https://dweb.link","https://w3s.link","https://gateway.pinata.cloud","https://nftstorage.link"];
+const GATEWAYS = ["https://cache.teia.rocks","https://ipfs.io","https://gateway.pinata.cloud","https://dweb.link","https://w3s.link"];
 const HEN_PLACEHOLDER = "QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc";
 const DOMAINS_CONTRACT = "KT1GBZmSxmnKJXGMdMLbugPfLyUPmuLSMwKS";
 const PAGE = 120;
@@ -182,6 +182,19 @@ function toHttp(uri, gw = GATEWAYS[gwIndex], dir = false) {
   if (/^(Qm|baf)/.test(uri)) return `${gw}/ipfs/${uri}`;
   return "";
 }
+const gwOrder = () => GATEWAYS.map((_, n) => GATEWAYS[(gwIndex + n) % GATEWAYS.length]);
+const srcList = (uri, dir = false) => [...new Set(gwOrder().map(g => toHttp(uri, g, dir)).filter(Boolean))];
+const vType = m => /quicktime/.test(m || "") ? "video/mp4" : (m || "");
+function videoHtml(uri, mime, attrs = "") {
+  return `<video ${attrs} playsinline preload="metadata">${srcList(uri).map(u => `<source src="${esc(u)}"${vType(mime) ? ` type="${esc(vType(mime))}"` : ""}>`).join("")}</video>`;
+}
+/* when every source of a video fails, say so */
+document.addEventListener("error", e => {
+  const s = e.target; if (!(s instanceof HTMLSourceElement)) return;
+  const v = s.parentElement; if (s !== v.lastElementChild) return;
+  const msg = v.dataset.failmsg || "Preview unavailable";
+  v.replaceWith(Object.assign(document.createElement("div"), {className: "ph", innerHTML: msg}));
+}, true);
 const cidOf = u => (u || "").replace(/^ipfs:\/\//, "").split(/[/?]/)[0];
 function area(f) { const m = /(\d+)\s*x\s*(\d+)/i.exec(f?.dimensions?.value || ""); return m ? (+m[1]) * (+m[2]) : 0; }
 function dims(f) { return f?.dimensions?.value ? String(f.dimensions.value).replace(/\s/g, "") : ""; }
@@ -321,7 +334,7 @@ function filtered() {
 function thumbHtml(i, cls = "") {
   if (!i.thumb) return `<div class="ph">${esc(KIND_LABEL[i.kind])}</div>`;
   const src = toHttp(i.thumb.uri);
-  if (i.thumb.video) return `<video class="${cls}" muted playsinline preload="none" data-src="${esc(src)}#t=0.5" data-uri="${esc(i.thumb.uri)}"></video>`;
+  if (i.thumb.video) return `<video class="${cls}" muted playsinline preload="none" data-uri="${esc(i.thumb.uri)}" data-mime="${esc(vType(i.mime))}"></video>`;
   return `<img class="${cls}" loading="lazy" decoding="async" alt="" src="${esc(src)}" data-uri="${esc(i.thumb.uri)}" data-try="0">`;
 }
 function render() {
@@ -343,8 +356,9 @@ document.addEventListener("error", e => {
   const n = +el.dataset.try + 1; if (n >= GATEWAYS.length) { el.replaceWith(Object.assign(document.createElement("div"), {className: "ph", textContent: "Preview unavailable"})); return; }
   el.dataset.try = n; el.src = toHttp(el.dataset.uri, GATEWAYS[(gwIndex + n) % GATEWAYS.length]);
 }, true);
-const vio = "IntersectionObserver" in window ? new IntersectionObserver(es => { for (const en of es) if (en.isIntersecting) { const v = en.target; v.src = v.dataset.src; v.preload = "metadata"; vio.unobserve(v); } }, {rootMargin: "300px"}) : null;
-function observeVideos() { for (const v of document.querySelectorAll("video[data-src]:not([src])")) vio ? vio.observe(v) : (v.src = v.dataset.src); }
+function armVideo(v) { if (v.dataset.armed) return; v.dataset.armed = 1; v.innerHTML = srcList(v.dataset.uri).map(u => `<source src="${esc(u)}#t=0.5"${v.dataset.mime ? ` type="${esc(v.dataset.mime)}"` : ""}>`).join(""); v.preload = "metadata"; v.load(); }
+const vio = "IntersectionObserver" in window ? new IntersectionObserver(es => { for (const en of es) if (en.isIntersecting) { armVideo(en.target); vio.unobserve(en.target); } }, {rootMargin: "300px"}) : null;
+function observeVideos() { for (const v of document.querySelectorAll("video[data-uri]:not([data-armed])")) vio ? vio.observe(v) : armVideo(v); }
 const moreIo = "IntersectionObserver" in window ? new IntersectionObserver(es => { if (es[0].isIntersecting && !$("moreBtn").hidden) { limit += PAGE; render(); } }, {rootMargin: "600px"}) : null;
 if (moreIo) moreIo.observe($("moreBtn"));
 
@@ -379,7 +393,9 @@ async function fetchBlob(uri) {
   for (let n = 0; n < GATEWAYS.length; n++) {
     const url = toHttp(uri, GATEWAYS[(gwIndex + n) % GATEWAYS.length]);
     if (!url) break;
-    try { const r = await fetch(url); if (r.ok) return await r.blob(); err = new Error("HTTP " + r.status); } catch (e) { err = e; }
+    const c = new AbortController(), t = setTimeout(() => c.abort(), 20000);
+    try { const r = await fetch(url, {signal: c.signal}); clearTimeout(t);
+      if (r.ok) return await r.blob(); err = new Error("HTTP " + r.status); } catch (e) { err = e; } finally { clearTimeout(t); }
     if (!uri.startsWith("ipfs://")) break;
   }
   throw err || new Error("No file");
@@ -455,10 +471,12 @@ function show() {
   $("lbOpen").href = fullUrl(i); $("lbObjkt").href = objktUrl(i);
   $("lbDl").disabled = !downloadUri(i); $("lbDl").textContent = touch ? (i.kind === "interactive" ? "Save still" : "Save") : (i.kind === "interactive" ? "Download still" : "Download");
   const url = fullUrl(i); let info = [KIND_LABEL[i.kind], i.mime, i.dims && i.dims + " px", i.collection].filter(Boolean).join(" · ");
-  $("lbInfo").textContent = info;
+  $("lbInfo").textContent = info; $("lbInfo").dataset.mb = "";
   const nav = `<button class="nav p" type="button" aria-label="Previous">‹</button><button class="nav n" type="button" aria-label="Next">›</button>`;
   if (!url) st.innerHTML = `<div class="ph">No media file is listed for this token.</div>` + nav;
-  else if (i.kind === "video") st.innerHTML = `<video controls autoplay loop playsinline src="${esc(url)}"></video>` + nav;
+  else if (i.kind === "video") { st.innerHTML = videoHtml(i.fullUri, i.mime, `controls loop${i.thumb && !i.thumb.video ? ` poster="${esc(toHttp(i.thumb.uri))}"` : ""}`) + nav;
+    const v = st.querySelector("video"); v.dataset.failmsg = "This video file isn't reachable on any IPFS gateway right now.";
+    v.addEventListener("loadedmetadata", () => { if (lbList[lbPos] === i && v.videoWidth) $("lbInfo").textContent = [KIND_LABEL[i.kind], i.mime, `${v.videoWidth}×${v.videoHeight} px`, i.collection].filter(Boolean).join(" · ") + ($("lbInfo").dataset.mb || ""); }); }
   else if (i.kind === "audio") st.innerHTML = `<div>${i.thumb ? `<img alt="" src="${esc(toHttp(i.thumb.uri))}">` : ""}<audio controls autoplay src="${esc(url)}"></audio></div>` + nav;
   else if (i.kind === "interactive") st.innerHTML = `<iframe sandbox="allow-scripts" src="${esc(url)}" title="${esc(i.name)}"></iframe>` + nav;
   else if (["image", "gif", "unknown", "other"].includes(i.kind)) {
@@ -466,9 +484,9 @@ function show() {
     const img = st.querySelector("img");
     img.onload = () => { $("lbInfo").textContent = [KIND_LABEL[i.kind], i.mime, `${img.naturalWidth}×${img.naturalHeight} px`, i.collection].filter(Boolean).join(" · ") + (img.naturalWidth > st.clientWidth || img.naturalHeight > st.clientHeight ? " · click image for actual size" : ""); };
     img.onclick = () => st.classList.toggle("actual");
-    if (i.kind === "unknown" || i.kind === "other") img.addEventListener("error", () => { if (+img.dataset.try >= GATEWAYS.length - 1) st.innerHTML = `<video controls autoplay loop playsinline src="${esc(url)}"></video>` + nav; });
+    if (i.kind === "unknown" || i.kind === "other") img.addEventListener("error", () => { if (+img.dataset.try >= GATEWAYS.length - 1) st.innerHTML = videoHtml(i.fullUri, "", "controls loop") + nav; });
   } else st.innerHTML = `<div class="ph">This ${esc(KIND_LABEL[i.kind])} piece can't be previewed here. Use Open original.</div>` + nav;
-  fetch(toHttp(downloadUri(i) || i.fullUri), {method: "HEAD"}).then(r => { const n = +r.headers.get("content-length"); if (n && lbList[lbPos] === i) $("lbInfo").textContent += ` · ${(n / 1048576).toFixed(n > 1048576 ? 1 : 2)} MB`; }).catch(() => {});
+  fetch(toHttp(downloadUri(i) || i.fullUri), {method: "HEAD"}).then(r => { const n = +r.headers.get("content-length"); if (n && lbList[lbPos] === i) { const mb = ` · ${(n / 1048576).toFixed(n > 1048576 ? 1 : 2)} MB`; $("lbInfo").dataset.mb = mb; $("lbInfo").textContent += mb; } }).catch(() => {});
 }
 function step(d) { if (!lbList.length) return; lbPos = (lbPos + d + lbList.length) % lbList.length; show(); }
 function stopPlay() { clearInterval(lbTimer); lbTimer = null; $("lbPlay").textContent = "Play"; }
