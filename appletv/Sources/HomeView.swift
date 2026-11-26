@@ -19,6 +19,8 @@ struct HomeView: View {
     @State private var numberError = ""
     @State private var lookingUp = false
     @State private var showSettings = false
+    @FocusState private var focus: HomeFocus?
+    private enum HomeFocus { case play, number }
 
     private var settings: SlideshowSettings {
         SlideshowSettings(secondsPerImage: secondsPerImage, shuffle: shuffle, showTitles: showTitles, videoSound: videoSound)
@@ -32,10 +34,17 @@ struct HomeView: View {
                     HStack(spacing: 30) {
                         Button { play(store.pieces) } label: { Label("Play everything", systemImage: "play.fill") }
                             .disabled(store.pieces.isEmpty)
+                            .focused($focus, equals: .play)
                         Button { play(store.pieces.filter { $0.kind == .video }) } label: { Label("Videos only", systemImage: "film") }
                             .disabled(store.pieces.isEmpty)
                         Button { askNumber = true; numberError = "" } label: { Label("Enter set number", systemImage: "number") }
+                            .focused($focus, equals: .number)
                         Button { showSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+                    }
+                    .defaultFocus($focus, .play)
+                    // On a first launch the play buttons wait for the collection; move to Play once it's there.
+                    .onChange(of: store.pieces.isEmpty) { _, empty in
+                        if !empty && focus == .number && !askNumber { focus = .play }
                     }
                     setsSection
                 }
