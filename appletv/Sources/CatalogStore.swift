@@ -135,16 +135,26 @@ final class CatalogStore: ObservableObject {
         }
     }
 
+    /// Tries a few times, because GitHub's unsigned API limit is shared by everyone on the same network address.
     func refreshSets() async {
+        for delay in [0, 20, 60] {
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            if await loadSetsOnce() { return }
+        }
+    }
+
+    private func loadSetsOnce() async -> Bool {
         var comps = URLComponents(string: "https://api.github.com/repos/\(Catalog.githubOwner)/\(Catalog.githubRepo)/issues")!
         comps.queryItems = [.init(name: "state", value: "open"), .init(name: "creator", value: Catalog.githubOwner),
                             .init(name: "per_page", value: "100")]
         do {
             let issues: [GitHubIssue] = try await getJSON(comps.url!)
             sets = issues.compactMap(makeSet)
-            setsMessage = sets.isEmpty ? "No sets yet. In the catalog, pick pieces and choose Send to Apple TV." : ""
+            setsMessage = sets.isEmpty ? "No sets yet. In the catalog, pick pieces and choose Apple TV." : ""
+            return true
         } catch {
-            setsMessage = "Couldn't load your sets from GitHub just now. You can still type a set number."
+            if sets.isEmpty { setsMessage = "Couldn't load your sets from GitHub just now. You can still type a set number." }
+            return false
         }
     }
 
@@ -175,7 +185,10 @@ final class CatalogStore: ObservableObject {
         let (data, resp) = try await session.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if code == 404 { throw URLError(.fileDoesNotExist) }
-        guard code == 200 else { throw URLError(.badServerResponse) }
+        guard code == 200 else {
+            NSLog("Slideshow: HTTP %d from %@", code, url.host() ?? "")
+            throw URLError(.badServerResponse)
+        }
         return try JSONDecoder().decode(T.self, from: data)
     }
 
@@ -203,7 +216,29 @@ final class CatalogStore: ObservableObject {
                 for a in accs { if let ad = a.address, let al = a.alias, names[ad] == nil { names[ad] = al } }
             }
         }
+        // objkt knows the profile names that many artists set there, which TzKT often lacks.
+        let rest = addrs.filter { names[$0] == nil }
+        for start in stride(from: 0, to: rest.count, by: 100) {
+            let list = rest[start..<min(start + 100, rest.count)].map { "\"\($0)\"" }.joined(separator: ",")
+            let query = "{holder(where:{address:{_in:[\(list)]}}){address alias tzdomain}}"
+            for h in await objktHolders(query) {
+                if let n = (h.alias?.isEmpty == false ? h.alias : h.tzdomain), !n.isEmpty { names[h.address] = n }
+            }
+        }
         creatorNames.merge(names) { a, _ in a }
+    }
+
+    private struct ObjktHolder: Decodable { let address: String; let alias: String?; let tzdomain: String? }
+
+    private func objktHolders(_ query: String) async -> [ObjktHolder] {
+        struct Reply: Decodable { struct D: Decodable { let holder: [ObjktHolder] }; let data: D? }
+        var req = URLRequest(url: URL(string: "https://data.objkt.com/v3/graphql")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["query": query])
+        guard let (data, resp) = try? await session.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200,
+              let reply = try? JSONDecoder().decode(Reply.self, from: data) else { return [] }
+        return reply.data?.holder ?? []
     }
 }
 

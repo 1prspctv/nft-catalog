@@ -43,7 +43,8 @@ jobs:
           if [ -n "$SET" ]; then ARGS=(-demoSet "$SET"); else ARGS=(-demoPlay); fi
           xcrun simctl launch --console-pty "$UDID" "$BID" "${ARGS[@]}" > shots/console.txt 2>&1 &
           for n in 2 3 4 5 6 7; do sleep 15; xcrun simctl io "$UDID" screenshot "shots/$n-slide.png"; done
-          tail -60 shots/console.txt || true
+          xcrun simctl spawn "$UDID" log show --last 10m --style compact --predicate 'process == "Slideshow"' > shots/log.txt 2>&1 || true
+          grep -i "slideshow:" shots/log.txt | tail -40 || true
       - name: Put small copies on the tv-preview branch
         if: always()
         env:
@@ -51,7 +52,7 @@ jobs:
         run: |
           mkdir -p small && cd small
           for f in ../shots/*.png; do [ -f "$f" ] && sips -s format jpeg -s formatOptions 70 -Z 1280 "$f" --out "$(basename "${f%.png}").jpg" > /dev/null; done
-          cp ../shots/console.txt . 2>/dev/null || true
+          cp ../shots/console.txt ../shots/log.txt . 2>/dev/null || true
           git init -q && git checkout -q -b tv-preview && git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Simulator screenshots from run ${{ github.run_id }}"
           git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}" tv-preview
