@@ -130,13 +130,14 @@ details.other{padding:0 max(4vw,16px) 24px;color:var(--mute);font-size:14px}
 </div>
 
 <div class="drawer" id="drawer" hidden><h2 style="font-size:20px;margin-bottom:8px">Your set</h2>
-  <p class="sub only-share" style="font-size:14px;margin:0 0 8px">To show the set on Apple TV: Save to Photos, put the items in an album, then play that album from the Photos app on the TV (iCloud Photos on).</p>
+  <p class="sub" style="font-size:14px;margin:0 0 8px">To play the set on Apple TV, tap Apple TV below and save it to GitHub. It then shows up in the 1prspctv app on the TV.</p>
   <div class="controls" style="margin-bottom:8px"><button class="btn only-share" id="zipSet2" type="button">Download ZIP</button><button class="btn" id="eachSet" type="button">Download one by one</button><button class="btn" id="linksSet" type="button">Save link list</button></div>
   <div id="setList"></div></div>
 <div class="bar">
   <div class="count"><span id="setCount">0</span> in set<small id="setHint">Tap thumbnails to add them</small></div>
   <button class="btn" id="showSet" type="button" aria-expanded="false">Set list</button>
   <button class="btn" id="viewSet" type="button">View set</button>
+  <button class="btn" id="tvSet" type="button">Apple TV</button>
   <button class="btn primary only-share" id="photosSet" type="button">Save to Photos</button>
   <button class="btn primary no-share" id="zipSet" type="button">Download ZIP</button>
   <button class="btn" id="clearSet" type="button">Clear</button>
@@ -164,6 +165,16 @@ details.other{padding:0 max(4vw,16px) 24px;color:var(--mute);font-size:14px}
   <button class="btn primary" id="phSave" type="button" disabled>Getting files ready…</button>
   <button class="btn" id="phSkip" type="button" hidden>Skip these and continue</button>
   <div id="phSkipped"></div>
+</div>
+<div class="sheet" id="tv" hidden role="dialog" aria-modal="true" aria-labelledby="tvTitle">
+  <h2 id="tvTitle">Send to Apple TV</h2>
+  <button class="btn x" id="tvClose" type="button" aria-label="Close">✕</button>
+  <label for="tvName" class="sub" style="font-size:14px">Name for this set</label>
+  <input id="tvName" type="text" maxlength="80" style="min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:16px">
+  <p class="sub" id="tvHow" style="margin:0;font-size:14px">GitHub opens with the set filled in. Sign in as 1prspctv if it asks, then tap <b>Create</b>. The set then appears in the 1prspctv app on Apple TV under Sets from the catalog. Its number is the set code.</p>
+  <a class="btn primary" id="tvGo" href="#" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Save the set on GitHub</a>
+  <p id="tvWarn" style="margin:0;font-size:14px;color:var(--mark)" hidden></p>
+  <div id="tvSaved" class="sub" style="font-size:14px"></div>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -393,7 +404,7 @@ function setItems() { return [...set].map(byKey).filter(Boolean); }
 function renderSet() {
   const s = setItems(); $("setCount").textContent = s.length;
   $("setHint").textContent = s.length ? "Saved in this browser" : "Tap thumbnails to add them";
-  for (const id of ["viewSet", "zipSet", "zipSet2", "photosSet", "eachSet", "linksSet", "clearSet"]) $(id).disabled = !s.length;
+  for (const id of ["viewSet", "tvSet", "zipSet", "zipSet2", "photosSet", "eachSet", "linksSet", "clearSet"]) $(id).disabled = !s.length;
   if (!$("drawer").hidden) $("setList").innerHTML = s.length ? s.map(i => `<div class="row" data-key="${esc(i.key)}">${i.thumb && !i.thumb.video ? `<img alt="" loading="lazy" src="${esc(toHttp(i.thumb.uri))}">` : `<div class="ph" style="position:static;width:48px;height:48px"></div>`}
     <div><b>${esc(i.name)}</b><div class="sub" style="font-size:13px">${esc(creatorLabel(i))} · ${esc(KIND_LABEL[i.kind])}${i.dims ? " · " + esc(i.dims) : ""}</div></div>
     <div class="acts"><a href="${esc(fullUrl(i))}" target="_blank" rel="noopener">Open</a><button type="button" data-act="dl">Download</button><button type="button" data-act="rm">Remove</button></div></div>`).join("") : `<p class="sub">Nothing in the set yet.</p>`;
@@ -567,6 +578,47 @@ function toCsv(list) {
 const objktUrl = i => `https://objkt.com/tokens/${i.contract}/${i.tokenId}`;
 function exportJson() { const data = items.map(i => ({...i, fullResUrl: fullUrl(i), downloadUrl: downloadUri(i) ? toHttp(downloadUri(i)) : "", objktUrl: objktUrl(i)})); save(new Blob([JSON.stringify({account: ACCOUNT, name: ACCOUNT_NAME, exported: new Date().toISOString(), count: data.length, tokens: data}, null, 1)], {type: "application/json"}), `${ACCOUNT_NAME}-catalog.json`); }
 
+/* ---------- Apple TV sets (saved as GitHub issues in this repo; the issue number is the set code) ---------- */
+const GH_REPO = "1prspctv/nft-catalog", TV_URL_MAX = 7800;
+function tvBody(list) {
+  const contracts = [], idx = new Map();
+  const pieces = list.map(i => { if (!idx.has(i.contract)) { idx.set(i.contract, contracts.length); contracts.push(i.contract); } return idx.get(i.contract) + "." + i.tokenId; });
+  return `This set was made in the ${ACCOUNT_NAME} catalog for the Apple TV app. The lines below list its pieces in order, so leave them as they are. Close this issue to remove the set.\n\ntvset v1\ncontracts: ${contracts.join(" ")}\npieces: ${pieces.join(" ")}\n`;
+}
+function tvUrl() {
+  const s = setItems(); const name = $("tvName").value.trim() || `Set of ${s.length}`;
+  return `https://github.com/${GH_REPO}/issues/new?` + new URLSearchParams({title: `TV set: ${name}`, body: tvBody(s)}).toString();
+}
+function tvRefresh() {
+  const s = setItems(), url = tvUrl(), big = url.length > TV_URL_MAX;
+  $("tvGo").href = big ? "#" : url;
+  $("tvGo").setAttribute("aria-disabled", big); $("tvGo").style.opacity = big ? .45 : 1; $("tvGo").style.pointerEvents = big ? "none" : "";
+  const per = url.length / Math.max(s.length, 1);
+  $("tvWarn").hidden = !big;
+  if (big) $("tvWarn").textContent = `This set is too big to send in one go. Keep it to about ${Math.floor(TV_URL_MAX / per)} pieces, or split it into a few sets.`;
+}
+async function tvSaved() {
+  const box = $("tvSaved"); box.textContent = "";
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/issues?state=open&creator=${GH_REPO.split("/")[0]}&per_page=100`, {headers: {accept: "application/vnd.github+json"}});
+    if (!r.ok) return;
+    const sets = (await r.json()).filter(x => !x.pull_request && /^tv set:/i.test(x.title) && /tvset v1/.test(x.body || ""));
+    if (!sets.length) return;
+    box.innerHTML = `<b style="color:var(--ink)">Sets already on Apple TV</b><ul>` + sets.map(x => { const n = ((x.body || "").match(/pieces:(.*)/) || ["", ""])[1].trim().split(/\s+/).filter(Boolean).length;
+      return `<li>Set ${x.number}: ${esc(x.title.replace(/^tv set:\s*/i, ""))} (${n} piece${n === 1 ? "" : "s"}) · <a href="${esc(x.html_url)}" target="_blank" rel="noopener">edit or remove</a></li>`; }).join("") + `</ul>`;
+  } catch (e) {}
+}
+function tvOpen() {
+  const s = setItems(); if (!s.length) return;
+  const d = new Date().toLocaleDateString(undefined, {month: "short", day: "numeric"});
+  $("tvName").value = `${s.length} pieces, ${d}`;
+  $("tv").hidden = false; tvRefresh(); tvSaved(); $("tvName").focus();
+}
+$("tvSet").addEventListener("click", tvOpen);
+$("tvName").addEventListener("input", tvRefresh);
+$("tvClose").addEventListener("click", () => $("tv").hidden = true);
+$("tvGo").addEventListener("click", () => setTimeout(() => { $("tvHow").innerHTML = "After you tap <b>Create</b> on GitHub, open the 1prspctv app on Apple TV and choose Refresh. The set number is the number GitHub shows after the title."; }, 300));
+
 /* ---------- viewer ---------- */
 function openViewer(list, pos) { lbList = list; lbPos = pos; $("lb").hidden = false; document.body.style.overflow = "hidden"; show(); $("lbClose").focus(); }
 function closeViewer() { stopPlay(); $("lb").hidden = true; $("stage").innerHTML = ""; document.body.style.overflow = ""; }
@@ -627,7 +679,7 @@ $("stage").addEventListener("click", e => { if (e.target.closest(".nav.p")) step
 $("lbToggle").addEventListener("click", () => { const i = lbList[lbPos]; toggle(i.key); syncCard(i.key); renderSet(); $("lbToggle").textContent = set.has(i.key) ? "In set ✓" : "Add to set"; });
 $("lbDl").addEventListener("click", () => downloadOne(lbList[lbPos], true));
 $("lbPlay").addEventListener("click", () => { if (lbTimer) return stopPlay(); lbTimer = setInterval(() => step(1), 5000); $("lbPlay").textContent = "Pause"; });
-document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("photos").hidden) return phClose(); if ($("lb").hidden) return; if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowRight") step(1); else if (e.key === "ArrowLeft") step(-1); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("photos").hidden) return phClose(); if (e.key === "Escape" && !$("tv").hidden) { $("tv").hidden = true; return; } if (e.key === "Escape" && !$("tv").hidden) { $("tv").hidden = true; return; } if ($("lb").hidden) return; if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowRight") step(1); else if (e.key === "ArrowLeft") step(-1); });
 
 const barRO = "ResizeObserver" in window ? new ResizeObserver(() => { const h = document.querySelector(".bar").offsetHeight; document.documentElement.style.setProperty("--barh", h + "px"); document.body.style.paddingBottom = (h + 24) + "px"; }) : null;
 if (barRO) barRO.observe(document.querySelector(".bar"));

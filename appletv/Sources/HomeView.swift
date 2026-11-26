@@ -50,6 +50,7 @@ struct HomeView: View {
             } message: {
                 Text("The number is shown in the catalog after you send a set to Apple TV.")
             }
+            .task { await demoIfAsked() }
             .fullScreenCover(item: $show) { s in
                 SlideshowView(pieces: s.pieces, settings: s.settings, store: store) { show = nil }
                     .ignoresSafeArea()
@@ -121,6 +122,19 @@ struct HomeView: View {
         numberError = list.count < set.keys.count
             ? "\(set.keys.count - list.count) pieces in “\(set.title)” aren't in the collection any more, so they're skipped." : ""
         play(list)
+    }
+
+    /// For automated previews on a simulator: launch with -demoPlay or -demoSet <number>.
+    private func demoIfAsked() async {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-demoPlay") || args.contains("-demoSet") else { return }
+        for _ in 0..<120 where store.pieces.isEmpty { try? await Task.sleep(nanoseconds: 500_000_000) }
+        try? await Task.sleep(nanoseconds: 4_000_000_000)
+        if let i = args.firstIndex(of: "-demoSet"), i + 1 < args.count, let n = Int(args[i + 1]) {
+            numberText = String(n); await openNumber()
+        } else {
+            play(Array(store.pieces.suffix(12)))
+        }
     }
 
     private func openNumber() async {

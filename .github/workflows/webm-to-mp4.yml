@@ -1,0 +1,33 @@
+name: WebM to MP4
+
+# Apple TV can't play WebM, so this makes MP4 copies of the collection's WebM videos
+# and publishes them with the catalog site under media/.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "17 9 * * 1"   # Mondays, to pick up newly collected pieces
+
+permissions:
+  contents: write
+
+concurrency: media
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - name: Install ffmpeg
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+      - name: Convert
+        run: python3 tools/convert_webm.py
+      - name: Publish
+        run: |
+          git add media
+          if git diff --cached --quiet; then echo "Nothing new."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Update MP4 copies of WebM videos"
+          git push origin HEAD:main
+          git push origin HEAD:gh-pages

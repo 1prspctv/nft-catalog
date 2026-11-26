@@ -1,0 +1,47 @@
+name: Apple TV preview
+
+# Runs the app in the Apple TV simulator and saves screenshots, to check how it looks.
+on:
+  workflow_dispatch:
+    inputs:
+      set:
+        description: Set number to play (blank plays the 12 newest pieces)
+        required: false
+        default: ""
+
+jobs:
+  preview:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build for the simulator
+        working-directory: appletv
+        run: |
+          brew install xcodegen && xcodegen generate
+          xcodebuild build -project Slideshow.xcodeproj -scheme Slideshow -configuration Debug \
+            -sdk appletvsimulator -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO > build.log 2>&1 || { grep error: build.log; exit 1; }
+      - name: Run and take screenshots
+        env:
+          SET: ${{ inputs.set }}
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes tvOS -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x['isAvailable']]; print(r[-1]['identifier'])")
+          TYPE=$(xcrun simctl list devicetypes -j | python3 -c "import json,sys; d=[x for x in json.load(sys.stdin)['devicetypes'] if 'Apple TV 4K' in x['name']]; print(d[-1]['identifier'])")
+          UDID=$(xcrun simctl create preview "$TYPE" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name "Slideshow.app" -maxdepth 3 | head -1)
+          xcrun simctl install "$UDID" "$APP"
+          BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          mkdir -p shots
+          xcrun simctl launch "$UDID" "$BID"
+          sleep 25; xcrun simctl io "$UDID" screenshot shots/1-home.png
+          xcrun simctl terminate "$UDID" "$BID"
+          if [ -n "$SET" ]; then ARGS=(-demoSet "$SET"); else ARGS=(-demoPlay); fi
+          xcrun simctl launch --console-pty "$UDID" "$BID" "${ARGS[@]}" > shots/console.txt 2>&1 &
+          for n in 2 3 4 5 6 7; do sleep 15; xcrun simctl io "$UDID" screenshot "shots/$n-slide.png"; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview
+          path: shots
