@@ -243,8 +243,16 @@ final class SlideshowViewController: UIViewController {
 
         caption.text = piece.name
         captionSub.text = creator(piece)
+        shownPiece = piece
         if settings.showTitles { flashCaption() }
         if currentPlayer == nil && !paused { scheduleAdvance(after: settings.secondsPerImage) }
+    }
+
+    private var shownPiece: Piece?
+
+    /// Artist names can arrive after a slide is on screen.
+    func refreshCaption() {
+        if let p = shownPiece { captionSub.text = creator(p) }
     }
 
     /// Short videos loop until the slide time is used up; longer ones play once.
@@ -292,7 +300,7 @@ struct SlideshowView: UIViewControllerRepresentable {
     let pieces: [Piece]
     var startAt: Int = 0
     let settings: SlideshowSettings
-    let store: CatalogStore
+    @ObservedObject var store: CatalogStore
     let onExit: () -> Void
 
     func makeUIViewController(context: Context) -> SlideshowViewController {
@@ -302,5 +310,5 @@ struct SlideshowView: UIViewControllerRepresentable {
         vc.onExit = onExit
         return vc
     }
-    func updateUIViewController(_ vc: SlideshowViewController, context: Context) {}
+    func updateUIViewController(_ vc: SlideshowViewController, context: Context) { vc.refreshCaption() }
 }

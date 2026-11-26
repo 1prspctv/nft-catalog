@@ -90,11 +90,12 @@ final class CatalogStore: ObservableObject {
            let cached = try? JSONDecoder().decode([Piece].self, from: data) {
             apply(cached)
         }
-        async let a: Void = refreshPieces()
-        async let b: Void = refreshSets()
-        async let c: Void = loadMP4Copies()
-        _ = await (a, b, c)
+        async let sets: Void = refreshSets()
+        async let copies: Void = loadMP4Copies()
+        if !pieces.isEmpty { await loadCreatorNames() }
+        await refreshPieces()
         await loadCreatorNames()
+        _ = await (sets, copies)
     }
 
     private func apply(_ list: [Piece]) {
@@ -148,7 +149,8 @@ final class CatalogStore: ObservableObject {
         comps.queryItems = [.init(name: "state", value: "open"), .init(name: "creator", value: Catalog.githubOwner),
                             .init(name: "per_page", value: "100")]
         do {
-            let issues: [GitHubIssue] = try await getJSON(comps.url!)
+            let issues: [GitHubIssue]
+            if let live: [GitHubIssue] = try? await getJSON(comps.url!) { issues = live } else { issues = try await mirroredSets() }
             sets = issues.compactMap(makeSet)
             setsMessage = sets.isEmpty ? "No sets yet. In the catalog, pick pieces and choose Apple TV." : ""
             return true
@@ -169,8 +171,14 @@ final class CatalogStore: ObservableObject {
         } catch let e as URLError where e.code == .fileDoesNotExist {
             return .failure(.notFound)
         } catch {
+            if let i = try? await mirroredSets().first(where: { $0.number == number }), let s = makeSet(i) { return .success(s) }
             return .failure(.network)
         }
+    }
+
+    /// The catalog site keeps a copy of the open sets in sets.json, written by a workflow whenever an issue changes.
+    private func mirroredSets() async throws -> [GitHubIssue] {
+        try await getJSON(Catalog.siteBase.appendingPathComponent("sets.json"))
     }
 
     private func makeSet(_ i: GitHubIssue) -> PieceSet? {
@@ -182,6 +190,7 @@ final class CatalogStore: ObservableObject {
     private func getJSON<T: Decodable>(_ url: URL) async throws -> T {
         var req = URLRequest(url: url)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.setValue("1prspctv-tv-slideshow", forHTTPHeaderField: "User-Agent")
         let (data, resp) = try await session.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if code == 404 { throw URLError(.fileDoesNotExist) }

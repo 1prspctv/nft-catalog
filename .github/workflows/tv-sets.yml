@@ -1,0 +1,60 @@
+name: TV sets list
+
+# Copies the open "TV set:" issues by the catalog's own account into sets.json on the site,
+# so the Apple TV app can read them without GitHub's per-address API limit.
+on:
+  issues:
+    types: [opened, edited, closed, reopened, deleted, transferred]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: site-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Write sets.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh api --paginate --slurp "repos/$REPO/issues?state=open&creator=$OWNER&per_page=100" > raw.json
+          python3 - <<'EOF'
+          import json, os
+          owner = os.environ["OWNER"].lower()
+          out = []
+          for i in [x for page in json.load(open("raw.json")) for x in page]:
+              if i.get("pull_request") or (i.get("user") or {}).get("login", "").lower() != owner:
+                  continue
+              if not i.get("title", "").startswith("TV set:") or "tvset v1" not in (i.get("body") or ""):
+                  continue
+              out.append({"number": i["number"], "title": i["title"], "body": i["body"], "state": "open",
+                          "user": {"login": i["user"]["login"]}})
+          out.sort(key=lambda s: -s["number"])
+          with open("sets.json", "w") as f:
+              json.dump(out, f, indent=1, ensure_ascii=False)
+              f.write("\n")
+          print(len(out), "sets")
+          EOF
+          rm raw.json
+      - name: Publish
+        run: |
+          git add sets.json
+          if git diff --cached --quiet; then echo "No change."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Update the list of TV sets"
+          for n in 1 2 3; do
+            git pull --rebase -q origin main && git push origin HEAD:main HEAD:gh-pages && exit 0
+            sleep 5
+          done
+          exit 1
