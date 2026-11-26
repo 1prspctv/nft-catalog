@@ -611,7 +611,7 @@ async function tvSaved() {
 function tvOpen() {
   const s = setItems(); if (!s.length) return;
   const d = new Date().toLocaleDateString(undefined, {month: "short", day: "numeric"});
-  $("tvName").value = `${s.length} pieces, ${d}`;
+  $("tvName").value = `${s.length} ${s.length === 1 ? "piece" : "pieces"}, ${d}`;
   $("tv").hidden = false; tvRefresh(); tvSaved(); $("tvName").focus();
 }
 $("tvSet").addEventListener("click", tvOpen);
